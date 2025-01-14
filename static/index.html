@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Web Scraper by Wolf</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.2/axios.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #f6f8ff 0%, #f0f4ff 100%);
+            color: #111827;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .image-container {
+            aspect-ratio: 16/9;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .image-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        .image-container:hover img {
+            transform: scale(1.05);
+        }
+        .image-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0));
+            color: white;
+            padding: 1rem 0.5rem 0.5rem;
+            font-size: 0.875rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .image-container:hover .image-info {
+            opacity: 1;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        .modal img {
+            max-width: 90%;
+            max-height: 90vh;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+        }
+        .modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        .modal-close:hover {
+            transform: rotate(90deg);
+        }
+        .modal-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0));
+            color: white;
+            padding: 2rem 1rem 1rem;
+            text-align: center;
+        }
+        .credits {
+            background: linear-gradient(90deg, #4f46e5, #8b5cf6, #ec4899);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            font-weight: bold;
+        }
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- Image Modal -->
+    <div id="imageModal" class="modal" onclick="closeModal()">
+        <span class="modal-close">&times;</span>
+        <img id="modalImage" onclick="event.stopPropagation()">
+        <div id="modalInfo" class="modal-info"></div>
+    </div>
+
+    <nav class="bg-white shadow-lg backdrop-blur-md bg-white/90 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl font-bold credits">Web Scraper</span>
+                    <span class="text-sm credits">by MDRHL1.0</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow">
+        <div class="bg-white/80 backdrop-blur-md rounded-2xl shadow-xl p-6 md:p-8">
+            <!-- URL Input Section -->
+            <div class="mb-8">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Start Scraping</h2>
+                <div class="flex flex-col md:flex-row gap-4">
+                    <input 
+                        type="url" 
+                        id="urlInput"
+                        placeholder="Enter URL to scrape (e.g., https://example.com)"
+                        class="flex-1 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                    >
+                    <button 
+                        onclick="startScraping()"
+                        class="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 text-white px-8 py-2 rounded-xl hover:opacity-90 transition-all duration-300 transform hover:scale-105"
+                    >
+                        Start Scraping
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="hidden mb-8">
+                <div class="flex items-center justify-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    <span class="ml-2 text-gray-600">Scraping in progress...</span>
+                </div>
+            </div>
+
+            <!-- Error Message -->
+            <div id="errorMessage" class="hidden mb-8 p-4 bg-red-100/80 backdrop-blur-sm text-red-700 rounded-xl border border-red-200">
+            </div>
+
+            <!-- Results Section -->
+            <div id="results" class="hidden space-y-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Scraping Results</h2>
+                
+                <!-- Page Title -->
+                <div class="result-card">
+                    <h3 class="font-semibold text-gray-700 mb-2">Page Title</h3>
+                    <p id="pageTitle" class="text-gray-600"></p>
+                </div>
+
+                <!-- Headings -->
+                <div class="result-card">
+                    <h3 class="font-semibold text-gray-700 mb-2">Headings Found</h3>
+                    <ul id="headingsList" class="list-disc list-inside space-y-2 text-gray-600">
+                    </ul>
+                </div>
+
+                <!-- Links -->
+                <div class="result-card">
+                    <h3 class="font-semibold text-gray-700 mb-2">Links Found</h3>
+                    <ul id="linksList" class="list-disc list-inside space-y-2 text-gray-600">
+                    </ul>
+                </div>
+
+                <!-- Images -->
+                <div class="result-card">
+                    <h3 class="font-semibold text-gray-700 mb-2">Images Found</h3>
+                    <div id="imagesList" class="image-grid">
+                    </div>
+                </div>
+
+                <!-- Paragraphs -->
+                <div class="result-card">
+                    <h3 class="font-semibold text-gray-700 mb-2">Main Content</h3>
+                    <div id="paragraphsList" class="space-y-4 text-gray-600">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-white/80 backdrop-blur-md border-t border-gray-200 mt-auto">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-center items-center space-x-2">
+                <span class="text-gray-500">Developed by</span>
+                <span class="credits text-lg">MDRHL1.0</span>
+                <span class="text-gray-500">copyright 2024</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // JavaScript remains unchanged
+        function openModal(imgUrl) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            const modalInfo = document.getElementById('modalInfo');
+            
+            modalImg.src = imgUrl;
+            modalInfo.textContent = `Image: ${imgUrl.split('/').pop()}`;
+            modal.style.display = 'flex';
+            
+            const img = new Image();
+            img.onload = function() {
+                modalInfo.textContent = `${imgUrl.split('/').pop()} (${this.width}x${this.height}px)`;
+            };
+            img.src = imgUrl;
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').style.display = 'none';
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        async function startScraping() {
+            const urlInput = document.getElementById('urlInput');
+            const loadingState = document.getElementById('loadingState');
+            const errorMessage = document.getElementById('errorMessage');
+            const results = document.getElementById('results');
+
+            errorMessage.classList.add('hidden');
+            results.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+
+            try {
+                const url = urlInput.value;
+                if (!url) {
+                    throw new Error('Please enter a valid URL');
+                }
+
+                const response = await axios.get(`/scrape?url=${encodeURIComponent(url)}`);
+                const data = response.data;
+
+                document.getElementById('pageTitle').textContent = data.page_title || 'No title found';
+                
+                const headingsList = document.getElementById('headingsList');
+                headingsList.innerHTML = data.titles.map(title => 
+                    `<li>${title}</li>`
+                ).join('');
+
+                const linksList = document.getElementById('linksList');
+                linksList.innerHTML = data.links.map(link => 
+                    `<li><a href="${link}" target="_blank" class="text-indigo-600 hover:text-indigo-800">${link}</a></li>`
+                ).join('');
+
+                const imagesList = document.getElementById('imagesList');
+                imagesList.innerHTML = data.images
+                    .filter(image => image.match(/\.(jpeg|jpg|gif|png)$/i))
+                    .map(image => `
+                        <div class="image-container bg-gray-100 rounded-lg" onclick="openModal('${image}')">
+                            <img 
+                                src="${image}" 
+                                alt="Scraped content"
+                                class="w-full h-full object-cover"
+                                onerror="this.parentElement.style.display='none'"
+                            />
+                            <div class="image-info">
+                                <div>${image.split('/').pop()}</div>
+                                <div class="text-xs">Click to view full size</div>
+                            </div>
+                        </div>
+                    `).join('');
+
+                const paragraphsList = document.getElementById('paragraphsList');
+                paragraphsList.innerHTML = data.paragraphs.map(para => 
+                    `<p>${para}</p>`
+                ).join('');
+
+                results.classList.remove('hidden');
+            } catch (error) {
+                console.error('Error:', error);
+                errorMessage.textContent = error.response?.data?.detail || error.message;
+                errorMessage.classList.remove('hidden');
+            } finally {
+                loadingState.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
